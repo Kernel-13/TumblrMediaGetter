@@ -11,7 +11,7 @@ def writeMediaFile(fileName, finalUrl):
     if not file.exists():
         with open(fileName, 'wb') as f:
             f.write(finalUrl.content)
-            print(Fore.GREEN + 'Saving ' + os.getcwd() + '/' + fileName + ' -- Success!')
+            print(Fore.GREEN + 'Downloaded ' + fileName)
     else:
         print(Fore.CYAN + 'File ' + fileName + ' already exists')
 
