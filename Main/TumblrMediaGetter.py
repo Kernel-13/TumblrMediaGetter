@@ -109,7 +109,7 @@ def tumblrGetter():
             time.sleep(2)
         elif option > 0 and option < 4:
             print('')
-            blogName = input("Enter blog's name: ")
+            blogName = input("Enter user name: ")
             getMedia(blogName, mediaTypes[option])
         else:
             print(Fore.RED + "\nThat's not a valid option. Please try again\n")
