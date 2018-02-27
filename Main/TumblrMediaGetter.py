@@ -1,7 +1,6 @@
 import requests
 import os
 import time
-import colorama
 from colorama import Fore, Style, init
 init(convert=True)
 from pathlib import Path
