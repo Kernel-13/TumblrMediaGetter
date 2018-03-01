@@ -4,18 +4,27 @@ import time
 from colorama import Fore, Style, init
 init(convert=True)
 from pathlib import Path
+import logging
+logging.basicConfig(filename='activity_log.txt', filemode='w',level=logging.DEBUG)
 
 def writeFile(finalPath, finalUrl):
     file = Path(finalPath)
+    fileName = finalPath.rsplit('\\', 1)[1]
     if not file.exists():
         with open(finalPath, 'wb') as f:
             f.write(finalUrl.content)
-            print(Fore.GREEN + 'Downloaded ' + finalPath.rsplit('/', 1)[1])
+            print(Fore.GREEN + 'Downloaded ' + fileName)
+            logging.info('File ' + fileName + ' has been successfully saved at ' + finalPath.replace(fileName, ''))
     else:
-        print(Fore.CYAN + 'File ' + finalPath.rsplit('/', 1)[1] + ' already exists')
+        print(Fore.CYAN + 'File ' + fileName + ' already exists')
+        logging.info('File already exists: ' + os.getcwd() + '\\' + finalPath)
 
 def generatePath(path, timestamp, tumblrFileUrl):
-    return path + '/' + str(timestamp) + '_' + tumblrFileUrl.rsplit('/', 1)[1]
+    name = ''
+    extension = tumblrFileUrl.rsplit('.', 1)[1]
+    if 'Pictures' in path:
+        name = '_p' + tumblrFileUrl.replace('_',' ').split(' ')[1].rsplit('o', 1)[1]
+    return path + '\\' + str(timestamp) + name + '.' + extension
 
 def getPictures(post, path):  
     for photo in post['photos']:
@@ -29,7 +38,7 @@ def getVideos(post, path):
         vidName = generatePath(path, post['timestamp'], post['video_url'])
         writeFile(vidName, url)
     except KeyError:
-        print(Fore.RED + 'Failed to download video from ' + post['video_url'])
+        print(Fore.RED + 'Failed to download video from ' + post['post_url'])
             
 def getAudio(post, path):
     audioName = post['audio_url'].rsplit('/', 1)[1]
@@ -54,20 +63,28 @@ def getMedia(blogName, mediaType):
         response = requests.get(url).json()
         
         if response['meta']['status'] == 200:
+                        
             total_posts = response['response']['total_posts']
             if total_posts > 0:
+                
                 if not os.path.isdir(blogName):
                     os.mkdir(blogName)
                         
                 if mediaType == 'audio':
-                    writePath = blogName + '/Audio'
+                    writePath = blogName + '\Audio'
                 elif mediaType == 'photo':
-                    writePath = blogName + '/Pictures'
+                    writePath = blogName + '\Pictures'
                 elif mediaType == 'video':
-                    writePath = blogName + '/Videos'
+                    writePath = blogName + '\Videos'
                                             
                 if not os.path.isdir(writePath):
                     os.mkdir(writePath)
+                    
+            elif total_posts == 0:
+                logging.warning('No ' + mediaType + ' posts were found at ' + blogName)
+                print(Fore.LIGHTMAGENTA_EX + "\nIt seems this blog doesn't contain any " + mediaType + ' posts!')
+                print("Try another option or try a different blog")
+                break
             
             for post in response['response']['posts']:
                 if mediaType == 'audio':
@@ -78,16 +95,21 @@ def getMedia(blogName, mediaType):
                     getVideos(post,writePath)
                 
             count += 20
-                
+            
             if count > total_posts:
+                logging.info('All ' + mediaType + ' posts have been downloaded')
                 print('\nDone!')
                 break
+            
         elif response['meta']['status'] == 404:
             print(Fore.RED + "\nWe couldn't find any blog with that name.")
             print(Fore.RED + "Check the spelling of the name or try a different blog")
+            logging.warning('Blog not found: ' + blogName)
             break
         else:
             print(Fore.RED + "\nOops! We may have reached the rate limit. Try again in a couple of hours")
+            logging.error('Server returned with status ' + str(response['meta']['status']))
+            logging.error(str(response['meta']['msg']))
             break
 
 def tumblrGetter():
@@ -96,18 +118,19 @@ def tumblrGetter():
         print('\nTumblr Media Getter')
         print('----------------------')
         print('Select an option:')
-        print('1. Download Photos from a blog')
-        print('2. Download Videos from a blog')
-        print('3. Download Audio from a blog')
-        print('4. Exit')
+        print('1. Get Photos from a blog')
+        print('2. Get Videos from a blog')
+        print('3. Get Audio from a blog')
+        print('0. Exit')
         data = input('Option: ')
         option = 1
         
         try:
             option = int(data)
-            if option == 4:
+            if option == 0:
                 print(Fore.YELLOW + '\nGoodbye!')
-                time.sleep(2)
+                logging.info('Exiting application')
+                time.sleep(1)
                 break
             elif option > 0 and option < 4:
                 blogName = input("Enter blog name: ")
@@ -120,13 +143,16 @@ def tumblrGetter():
         print(Style.RESET_ALL)
 
 def main():  
+    logging.info('Starting application')
     while True:
         try:
             tumblrGetter()
             break
         except KeyboardInterrupt:
             print(Style.RESET_ALL)
+            logging.warning('SIGINT detected -- Waiting for user input')
             reply = input("You pressed Ctrl+Z. Do you want to exit the application? (Y/N): ")
+            logging.warning('User reply to warning: ' + reply)
             if reply.lower().startswith('y'):
                 break
             
