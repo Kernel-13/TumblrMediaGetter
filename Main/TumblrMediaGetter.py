@@ -7,95 +7,93 @@ from pathlib import Path
 import logging
 logging.basicConfig(filename='activity_log.txt', filemode='w',level=logging.DEBUG)
 
-def writeFile(finalPath, finalUrl):
-    file = Path(finalPath)
-    fileName = finalPath.rsplit('\\', 1)[1]
+def save_file(file_path, data):
+    file = Path(file_path)
+    filename = file_path.rsplit('\\', 1)[1]
     if not file.exists():
-        with open(finalPath, 'wb') as f:
-            f.write(finalUrl.content)
-            print(Fore.GREEN + 'Downloaded ' + fileName)
-            logging.info('File ' + fileName + ' has been successfully saved at ' + finalPath.replace(fileName, ''))
+        with open(file_path, 'wb') as f:
+            f.write(data.content)
+            print(Fore.GREEN + 'Downloaded ' + filename)
+            logging.info('File ' + filename + ' has been successfully saved at ' + file_path.replace(filename, ''))
     else:
-        print(Fore.CYAN + 'File ' + fileName + ' already exists')
-        logging.info('File already exists: ' + os.getcwd() + '\\' + finalPath)
+        print(Fore.CYAN + 'File ' + filename + ' already exists')
+        logging.info('File already exists: ' + os.getcwd() + '\\' + file_path)
 
-def generatePath(path, post, tumblrFileUrl):
-    extension = tumblrFileUrl.rsplit('.', 1)[1]
+def download_media(post, path, mediaType):
+    file_path = ''
+    media_url = ''
+    content = None
+    if mediaType == 'audio':    
+        audio_url = post['audio_url'].rsplit('/', 1)[1]
+        if '.mp3' in audio_url:
+            media_url = post['audio_url']
+            content = requests.get(media_url, stream=True)
+        else:
+            redirected = requests.get(post['audio_url'], allow_redirects=True)
+            content = requests.get(redirected.url, stream=True)
+            media_url = content.url
+            if 'soundcloud' in post['audio_url']:
+                media_url = content.url.split('?Policy')[0]
+    elif mediaType == 'photo':  
+        for photo in post['photos']:
+            content = requests.get(photo['original_size']['url'], stream=True) 
+            file_path = generate_filepath(path, post, photo['original_size']['url'])
+            save_file(file_path, content) 
+        return
+    elif mediaType == 'video':  
+        try:
+            content = requests.get(post['video_url'], stream=True) 
+            media_url = post['video_url']
+        except KeyError:
+            print(Fore.RED + 'Failed to download video from ' + post['post_url'])
+            logging.error("Post doesn't have a 'video_url' field: " + post['post_url'])
+            return
+    file_path = generate_filepath(path, post, media_url)
+    save_file(file_path, content)
+
+def generate_filepath(path, post, media_url):
+    extension = media_url.rsplit('.', 1)[1]
     photo_number = ''
     if 'photo' in path:
-        photo_number = ' [' + tumblrFileUrl.replace('_',' ').split(' ')[1].rsplit('o', 1)[1] + ']'
+        photo_number = ' [' + media_url.replace('_',' ').split(' ')[1].rsplit('o', 1)[1] + ']'
     return path + '\\' + str(post['timestamp']) + ' ' + str(post['id']) + photo_number + '.' + extension
-
-def getPictures(post, path):  
-    for photo in post['photos']:
-        url = requests.get(photo['original_size']['url'], stream=True) 
-        picName = generatePath(path, post, photo['original_size']['url'])
-        writeFile(picName, url)   
-     
-def getVideos(post, path):
-    try:
-        url = requests.get(post['video_url'], stream=True) 
-        vidName = generatePath(path, post, post['video_url'])
-        writeFile(vidName, url)
-    except KeyError:
-        print(Fore.RED + 'Failed to download video from ' + post['post_url'])
-            
-def getAudio(post, path):
-    audioName = post['audio_url'].rsplit('/', 1)[1]
-    if '.mp3' in audioName:
-        audioName = generatePath(path, post, post['audio_url'])
-        finalUrl = requests.get(post['audio_url'], stream=True)
-        writeFile(audioName, finalUrl)
-    else:
-        url = requests.get(post['audio_url'], allow_redirects=True)
-        finalUrl = requests.get(url.url, stream=True)
-        audioName = generatePath(path, post, finalUrl.url)
-        if 'soundcloud' in post['audio_url']:
-            audioName = audioName.split('?Policy')[0]
-        writeFile(audioName, finalUrl)
     
-def getMedia(blogName, mediaType, tag=''):
+def get_posts(blog_name, media_type, tag=''):
     
-    '''
-    if tag != '':
-        tag = '&tag=' + tag
-    '''
-    
-    blogUrl = 'https://api.tumblr.com/v2/blog/' + blogName + '.tumblr.com/posts/' + mediaType + '?api_key=zEhk20rj71veq1vOkr7wZ5HoRSOuwRunDR7ErNhoMePhIiOlit' + tag
+    #if tag != '': tag = '&tag=' + tag
+    blog_url = 'https://api.tumblr.com/v2/blog/' + blog_name + '.tumblr.com/posts/' + media_type + '?api_key=zEhk20rj71veq1vOkr7wZ5HoRSOuwRunDR7ErNhoMePhIiOlit' + tag
     offset = 0
-    writePath = blogName
+    folder_path = None
     while True:
-        url = blogUrl + "&offset=" + str(offset)        
+        url = blog_url + "&offset=" + str(offset)        
         response = requests.get(url).json()
         
         if response['meta']['status'] == 200:
                         
             total_posts = response['response']['total_posts']
             if total_posts > 0:
-                writePath = blogName + '\\' + mediaType
-                os.makedirs(writePath, exist_ok=True)             
+                folder_path = blog_name + '\\' + media_type
+                os.makedirs(folder_path, exist_ok=True)             
             elif total_posts == 0:
-                logging.warning('No ' + mediaType + ' posts were found at ' + blogName)
-                print(Fore.LIGHTMAGENTA_EX + "\nIt seems this blog doesn't contain any " + mediaType + ' posts!')
+                logging.warning('No ' + media_type + ' posts were found at ' + blog_name)
+                print(Fore.LIGHTMAGENTA_EX + "\nIt seems this blog doesn't contain any " + media_type + ' posts!')
                 print("Try another option or try a different blog")
                 break
             
             for post in response['response']['posts']:
-                if mediaType == 'audio':    getAudio(post,writePath)
-                elif mediaType == 'photo':  getPictures(post,writePath)
-                elif mediaType == 'video':  getVideos(post,writePath)
+                download_media(post,folder_path,media_type)
                 
             offset += 20
             
             if offset > total_posts:
-                logging.info('All ' + mediaType + ' posts from ' + blogName + ' with tag "' + tag + '" have been downloaded')
+                logging.info('All ' + media_type + ' posts from ' + blog_name + ' with tag "' + tag + '" have been downloaded')
                 print('\nDone!')
                 break
             
         elif response['meta']['status'] == 404:
             print(Fore.RED + "\nWe couldn't find any blog with that name.")
             print(Fore.RED + "Check the spelling of the name or try a different blog")
-            logging.warning('Blog not found: ' + blogName)
+            logging.warning('Blog not found: ' + blog_name)
             break
         else:
             print(Fore.RED + "\nOops! We may have reached the rate limit. Try again in a couple of hours")
@@ -103,8 +101,8 @@ def getMedia(blogName, mediaType, tag=''):
             logging.error(str(response['meta']['msg']))
             break
 
-def tumblrGetter():
-    mediaTypes = {1:'photo', 2:'video',3:'audio' }
+def tumblr_media_getter():
+    media_types = {1:'photo', 2:'video',3:'audio' }
     while True:
         print('\nTumblr Media Getter v1.07')
         print('----------------------')
@@ -123,9 +121,9 @@ def tumblrGetter():
                 time.sleep(1)
                 break
             elif option > 0 and option < 4:
-                blogName = input("Enter blog name: ")
+                blog_name = input("Enter blog name: ")
                 #tag = input("Download posts that match the following tag (leave empty to download all posts): ")
-                getMedia(blogName.lower(), mediaTypes[option])
+                get_posts(blog_name.lower(), media_types[option])
             else:
                 print(Fore.RED + "\nThat's not a valid option. Please try again")
         except ValueError:
@@ -137,7 +135,7 @@ def main():
     logging.info('Starting application')    
     while True:
         try:
-            tumblrGetter()
+            tumblr_media_getter()
             break
         except KeyboardInterrupt:
             print(Style.RESET_ALL)
@@ -149,4 +147,3 @@ def main():
          
 if __name__== "__main__":
     main()
-
