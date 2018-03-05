@@ -5,7 +5,7 @@ from colorama import Fore, Style, init
 init(convert=True)
 from pathlib import Path
 import logging
-logging.basicConfig(filename='activity_log.txt', filemode='w',level=logging.DEBUG)
+logging.basicConfig(handlers=[logging.FileHandler('activity_log.txt', 'w', 'utf-8')],level=logging.DEBUG)
 
 def save_file(file_path, data):
     file = Path(file_path)
@@ -60,7 +60,7 @@ def generate_filepath(path, post, media_url):
     
 def get_posts(blog_name, media_type, tag=''):
     
-    #if tag != '': tag = '&tag=' + tag
+    if tag != '': tag = '&tag=' + tag
     blog_url = 'https://api.tumblr.com/v2/blog/' + blog_name + '.tumblr.com/posts/' + media_type + '?api_key=zEhk20rj71veq1vOkr7wZ5HoRSOuwRunDR7ErNhoMePhIiOlit' + tag
     offset = 0
     folder_path = None
@@ -75,9 +75,14 @@ def get_posts(blog_name, media_type, tag=''):
                 folder_path = blog_name + '\\' + media_type
                 os.makedirs(folder_path, exist_ok=True)             
             elif total_posts == 0:
-                logging.warning('No ' + media_type + ' posts were found at ' + blog_name)
-                print(Fore.LIGHTMAGENTA_EX + "\nIt seems this blog doesn't contain any " + media_type + ' posts!')
-                print("Try another option or try a different blog")
+                if tag != '':
+                    logging.warning('No ' + media_type + ' posts with tag = "' + tag.split('=')[1] + '" were found at ' + blog_name)
+                    print(Fore.LIGHTMAGENTA_EX + "\nIt seems this blog doesn't contain any " + media_type + ' posts with the "' + tag.split('=')[1] + '" tag!')
+                    print("Try another option or try a different blog / tag")
+                else:
+                    logging.warning('No ' + media_type + ' posts were found at ' + blog_name)
+                    print(Fore.LIGHTMAGENTA_EX + "\nIt seems this blog doesn't contain any " + media_type + ' posts!')
+                    print("Try another option or try a different blog")
                 break
             
             for post in response['response']['posts']:
@@ -86,7 +91,7 @@ def get_posts(blog_name, media_type, tag=''):
             offset += 20
             
             if offset > total_posts:
-                logging.info('All ' + media_type + ' posts from ' + blog_name + ' with tag "' + tag + '" have been downloaded')
+                logging.info('All ' + media_type + ' posts from ' + blog_name + ' with tag "' + tag.split('=')[1] + '" have been downloaded')
                 print('\nDone!')
                 break
             
@@ -122,8 +127,8 @@ def tumblr_media_getter():
                 break
             elif option > 0 and option < 4:
                 blog_name = input("Enter blog name: ")
-                #tag = input("Download posts that match the following tag (leave empty to download all posts): ")
-                get_posts(blog_name.lower(), media_types[option])
+                tag = input("Download posts that match the following tag (leave empty to download all posts): ")
+                get_posts(blog_name.lower(), media_types[option],tag.lower())
             else:
                 print(Fore.RED + "\nThat's not a valid option. Please try again")
         except ValueError:
