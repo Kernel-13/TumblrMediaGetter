@@ -58,10 +58,10 @@ def generate_filepath(path, post, media_url):
         photo_number = ' [' + media_url.replace('_',' ').split(' ')[1].rsplit('o', 1)[1] + ']'
     return path + '\\' + str(post['timestamp']) + ' ' + str(post['id']) + photo_number + '.' + extension
     
-def get_posts(blog_name, media_type, tag=''):
-    
-    if tag != '': tag = '&tag=' + tag
-    blog_url = 'https://api.tumblr.com/v2/blog/' + blog_name + '.tumblr.com/posts/' + media_type + '?api_key=zEhk20rj71veq1vOkr7wZ5HoRSOuwRunDR7ErNhoMePhIiOlit' + tag
+def get_posts(rqst_prmts):
+    tag = ''
+    if rqst_prmts['tag']: tag = '&tag=' + rqst_prmts['tag']
+    blog_url = 'https://api.tumblr.com/v2/blog/' + rqst_prmts['blog_name'] + '.tumblr.com/posts/' + rqst_prmts['type'] + rqst_prmts['api_key'] + tag
     offset = 0
     folder_path = None
     while True:
@@ -72,33 +72,36 @@ def get_posts(blog_name, media_type, tag=''):
                         
             total_posts = response['response']['total_posts']
             if total_posts > 0:
-                folder_path = blog_name + '\\' + media_type
-                os.makedirs(folder_path, exist_ok=True)             
+                print(Fore.GREEN + "\n------- Found " + str(total_posts) + " posts -------")
+                folder_path = rqst_prmts['blog_name'] + '\\' + rqst_prmts['type']
+                os.makedirs(folder_path, exist_ok=True)           
             elif total_posts == 0:
-                if tag != '':
-                    logging.warning('No ' + media_type + ' posts with tag = "' + tag.split('=')[1] + '" were found at ' + blog_name)
-                    print(Fore.LIGHTMAGENTA_EX + "\nIt seems this blog doesn't contain any " + media_type + ' posts with the "' + tag.split('=')[1] + '" tag!')
-                    print("Try another option or try a different blog / tag")
-                else:
-                    logging.warning('No ' + media_type + ' posts were found at ' + blog_name)
-                    print(Fore.LIGHTMAGENTA_EX + "\nIt seems this blog doesn't contain any " + media_type + ' posts!')
+                if not rqst_prmts['tag']:
+                    logging.warning('No ' + rqst_prmts['type'] + ' posts were found at ' + rqst_prmts['blog_name'])
+                    print(Fore.LIGHTMAGENTA_EX + "\nIt seems this blog doesn't contain any " + rqst_prmts['type'] + ' posts!')
                     print("Try another option or try a different blog")
+                else:
+                    logging.warning('No ' + rqst_prmts['type'] + ' posts with tag = "' + rqst_prmts['tag'] + '" were found at ' + rqst_prmts['blog_name'])
+                    print(Fore.LIGHTMAGENTA_EX + "\nIt seems this blog doesn't contain any " + rqst_prmts['type'] + ' posts with the "' + rqst_prmts['tag'] + '" tag!')
+                    print("Try another option or try a different blog / tag")
                 break
             
             for post in response['response']['posts']:
-                download_media(post,folder_path,media_type)
+                download_media(post,folder_path,rqst_prmts['type'])
                 
             offset += 20
             
             if offset > total_posts:
-                logging.info('All ' + media_type + ' posts from ' + blog_name + ' with tag "' + tag.split('=')[1] + '" have been downloaded')
-                print('\nDone!')
+                if not rqst_prmts['tag']: logging.info('All ' + rqst_prmts['type'] + ' posts from ' + rqst_prmts['blog_name'] + ' have been downloaded')
+                else: logging.info('All ' + rqst_prmts['type'] + ' posts from ' + rqst_prmts['blog_name'] + ' with tag "' + rqst_prmts['tag'] + '" have been downloaded')
+                
+                print('\n------- Done! -------')
                 break
             
         elif response['meta']['status'] == 404:
             print(Fore.RED + "\nWe couldn't find any blog with that name.")
             print(Fore.RED + "Check the spelling of the name or try a different blog")
-            logging.warning('Blog not found: ' + blog_name)
+            logging.warning('Blog not found: ' + rqst_prmts['blog_name'])
             break
         else:
             print(Fore.RED + "\nOops! We may have reached the rate limit. Try again in a couple of hours")
@@ -108,6 +111,11 @@ def get_posts(blog_name, media_type, tag=''):
 
 def tumblr_media_getter():
     media_types = {1:'photo', 2:'video',3:'audio' }
+    request_parameters = {'blog_name':'',
+                          'api_key':'?api_key=zEhk20rj71veq1vOkr7wZ5HoRSOuwRunDR7ErNhoMePhIiOlit',
+                          'type': '',
+                          'post_id':0,
+                          'tag':''}
     while True:
         print('\nTumblr Media Getter v1.07')
         print('----------------------')
@@ -126,9 +134,10 @@ def tumblr_media_getter():
                 time.sleep(1)
                 break
             elif option > 0 and option < 4:
-                blog_name = input("Enter blog name: ")
-                tag = input("Download posts that match the following tag (leave empty to download all posts): ")
-                get_posts(blog_name.lower(), media_types[option],tag.lower())
+                request_parameters['blog_name'] = input("Enter blog name: ")
+                request_parameters['tag'] = input("Download posts that match the following tag (leave empty to download all posts): ")
+                request_parameters['type'] = media_types[option]
+                get_posts(request_parameters)
             else:
                 print(Fore.RED + "\nThat's not a valid option. Please try again")
         except ValueError:
@@ -152,3 +161,4 @@ def main():
          
 if __name__== "__main__":
     main()
+    
