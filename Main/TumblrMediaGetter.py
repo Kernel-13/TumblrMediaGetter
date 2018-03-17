@@ -10,7 +10,7 @@ logging.basicConfig(handlers=[logging.FileHandler('activity_log.txt', 'w', 'utf-
 def save_file(file_path, data):
     file = Path(file_path)
     filename = file_path.rsplit('\\', 1)[1]
-    if not file.exists():
+    if not file.exists() or os.path.getsize(file_path) != len(data.content):
         with open(file_path, 'wb') as f:
             f.write(data.content)
             print(Fore.GREEN + 'Downloaded ' + filename)
@@ -63,51 +63,43 @@ def get_posts(rqst_prmts):
     if rqst_prmts['tag']: tag = '&tag=' + rqst_prmts['tag']
     blog_url = 'https://api.tumblr.com/v2/blog/' + rqst_prmts['blog_name'] + '.tumblr.com/posts/' + rqst_prmts['type'] + rqst_prmts['api_key'] + tag
     offset = 0
-    folder_path = None
-    while True:
-        url = blog_url + "&offset=" + str(offset)        
-        response = requests.get(url).json()
-        
-        if response['meta']['status'] == 200:
-                        
-            total_posts = response['response']['total_posts']
-            if total_posts > 0:
-                print(Fore.GREEN + "\n------- Found " + str(total_posts) + " posts -------")
-                folder_path = rqst_prmts['blog_name'] + '\\' + rqst_prmts['type']
-                os.makedirs(folder_path, exist_ok=True)           
-            elif total_posts == 0:
-                if not rqst_prmts['tag']:
-                    logging.warning('No ' + rqst_prmts['type'] + ' posts were found at ' + rqst_prmts['blog_name'])
-                    print(Fore.LIGHTMAGENTA_EX + "\nIt seems this blog doesn't contain any " + rqst_prmts['type'] + ' posts!')
-                    print("Try another option or try a different blog")
-                else:
-                    logging.warning('No ' + rqst_prmts['type'] + ' posts with tag = "' + rqst_prmts['tag'] + '" were found at ' + rqst_prmts['blog_name'])
-                    print(Fore.LIGHTMAGENTA_EX + "\nIt seems this blog doesn't contain any " + rqst_prmts['type'] + ' posts with the "' + rqst_prmts['tag'] + '" tag!')
-                    print("Try another option or try a different blog / tag")
-                break
+    url = blog_url + "&offset=" + str(offset)        
+    response = requests.get(url).json()
+    
+    if response['meta']['status'] == 200:
+        total_posts = response['response']['total_posts']
+        if total_posts > 0:
+            print(Fore.GREEN + "\n========> Found " + str(total_posts) + " posts\n")
+            folder_path = rqst_prmts['blog_name'] + '\\' + rqst_prmts['type']
+            os.makedirs(folder_path, exist_ok=True)  
             
-            for post in response['response']['posts']:
-                download_media(post,folder_path,rqst_prmts['type'])
-                
-            offset += 20
-            
-            if offset > total_posts:
-                if not rqst_prmts['tag']: logging.info('All ' + rqst_prmts['type'] + ' posts from ' + rqst_prmts['blog_name'] + ' have been downloaded')
-                else: logging.info('All ' + rqst_prmts['type'] + ' posts from ' + rqst_prmts['blog_name'] + ' with tag "' + rqst_prmts['tag'] + '" have been downloaded')
-                
-                print('\n------- Done! -------')
-                break
-            
-        elif response['meta']['status'] == 404:
-            print(Fore.RED + "\nWe couldn't find any blog with that name.")
-            print(Fore.RED + "Check the spelling of the name or try a different blog")
-            logging.warning('Blog not found: ' + rqst_prmts['blog_name'])
-            break
-        else:
-            print(Fore.RED + "\nOops! We may have reached the rate limit. Try again in a couple of hours")
-            logging.error('Server returned status ' + str(response['meta']['status']))
-            logging.error(str(response['meta']['msg']))
-            break
+            while offset <= total_posts:
+                for post in response['response']['posts']:  download_media(post,folder_path,rqst_prmts['type'])       
+                offset += 20
+                url = blog_url + "&offset=" + str(offset)        
+                response = requests.get(url).json()
+
+            if not rqst_prmts['tag']: logging.info('All ' + rqst_prmts['type'] + ' posts from ' + rqst_prmts['blog_name'] + ' have been downloaded')
+            else: logging.info('All ' + rqst_prmts['type'] + ' posts from ' + rqst_prmts['blog_name'] + ' with tag "' + rqst_prmts['tag'] + '" have been downloaded')
+            print('\n     Done!')
+                     
+        elif total_posts == 0:
+            if not rqst_prmts['tag']:
+                logging.warning('No ' + rqst_prmts['type'] + ' posts were found at ' + rqst_prmts['blog_name'])
+                print(Fore.LIGHTMAGENTA_EX + "\nIt seems this blog doesn't contain any " + rqst_prmts['type'] + ' posts!')
+                print("Try another option or try a different blog")
+            else:
+                logging.warning('No ' + rqst_prmts['type'] + ' posts with tag = "' + rqst_prmts['tag'] + '" were found at ' + rqst_prmts['blog_name'])
+                print(Fore.LIGHTMAGENTA_EX + "\nIt seems this blog doesn't contain any " + rqst_prmts['type'] + ' posts with the "' + rqst_prmts['tag'] + '" tag!')
+                print("Try another option or try a different blog / tag")
+    elif response['meta']['status'] == 404:
+        print(Fore.RED + "\nWe couldn't find any blog with that name.")
+        print(Fore.RED + "Check the spelling of the name or try a different blog")
+        logging.warning('Blog not found: ' + rqst_prmts['blog_name'])
+    else:
+        print(Fore.RED + "\nOops! We may have reached the rate limit. Try again in a couple of hours")
+        logging.error('Server returned status ' + str(response['meta']['status']))
+        logging.error(str(response['meta']['msg']))
 
 def tumblr_media_getter():
     media_types = {1:'photo', 2:'video',3:'audio' }
